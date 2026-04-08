@@ -1,5 +1,5 @@
 {
-  "openclaw_endpoint": "http://192.168.5.87:18789/api/context",
+  "openclaw_endpoint": "http://192.168.4.100:8790/api/context",
   "poll_interval": 5,
   "min_text_length": 20,
   "ignored_apps": [

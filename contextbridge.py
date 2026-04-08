@@ -219,23 +219,32 @@ class ContextBridge:
         """Main daemon loop"""
         print(f"ContextBridge started - polling every {self.config['poll_interval']}s")
         print(f"Sending context to: {self.config['openclaw_endpoint']}")
+        print("Debug mode: will show all attempts...")
+        print()
         
         self.running = True
         
         while self.running:
             try:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Checking active window...", end=" ")
                 context = self.get_active_window_context()
                 
                 if context:
                     text_content = context["text_content"]
+                    print(f"Found: {context['app_name']} - {context['window_title'][:50]}...")
                     
                     if self.context_changed(text_content):
-                        print(f"[{context['timestamp'][:19]}] {context['app_name']}: {text_content[:100]}...")
+                        print(f"  → NEW CONTEXT: {text_content[:100]}...")
                         
                         if self.send_context_to_openclaw(context):
                             self.last_context = text_content
+                            print(f"  → ✅ Sent to OpenClaw")
                         else:
-                            print("Failed to send to OpenClaw")
+                            print(f"  → ❌ Failed to send to OpenClaw")
+                    else:
+                        print(f"  → (no change, skipping)")
+                else:
+                    print("No context captured (system app or error)")
                 
                 time.sleep(self.config["poll_interval"])
                 

@@ -57,57 +57,53 @@ class ContextBridge:
     def get_active_window_context(self) -> Optional[Dict]:
         """Extract context from active window"""
         try:
-            # Get all running applications and find the best one to read
-            target_apps = [
-                ('com.apple.Safari', 'Safari'),
-                ('com.google.Chrome', 'Chrome'), 
-                ('com.microsoft.VSCode', 'VSCode'),
-                ('com.apple.TextEdit', 'TextEdit'),
-                ('com.apple.Notes', 'Notes'),
-                ('com.apple.mail', 'Mail'),
-                ('com.slack.Slack', 'Slack'),
-                ('co.zeit.hyper', 'Hyper'),
-                ('dev.warp.Warp-Stable', 'Warp'),
-            ]
-            
-            best_app = None
-            best_window = None
+            # First, try to get the actual frontmost/focused app
+            frontmost_app = None
             app_name = "Unknown"
             
-            # Try each target app to see if it's running and has content
-            for bundle_id, name in target_apps:
-                try:
-                    app = atomacos.getAppRefByBundleId(bundle_id)
-                    if app and hasattr(app, 'windows') and app.windows():
-                        windows = app.windows()
-                        if windows:
-                            # Found an app with windows - use it
-                            best_app = app
-                            best_window = windows[0]  # Use first window
-                            app_name = name
-                            break
-                except Exception:
-                    continue  # App not running or accessible
+            # Try system-wide focused window first (most accurate)
+            try:
+                system_wide = atomacos.getSystemObject()
+                if hasattr(system_wide, 'AXFocusedWindow') and system_wide.AXFocusedWindow:
+                    focused_window = system_wide.AXFocusedWindow
+                    # Walk up the hierarchy to find the parent application
+                    parent = focused_window
+                    while parent and getattr(parent, 'AXRole', '') != 'AXApplication':
+                        parent = getattr(parent, 'AXParent', None)
+                    
+                    if parent and getattr(parent, 'AXRole', '') == 'AXApplication':
+                        frontmost_app = parent
+                        best_window = focused_window
+                        app_name = getattr(frontmost_app, 'AXTitle', '') or "Unknown"
+            except Exception:
+                pass
             
-            # Fallback: try frontmost app if no target apps found
-            if not best_app:
+            # Fallback: try the traditional frontmost app method
+            if not frontmost_app:
                 try:
                     frontmost_app = atomacos.getFrontmostApp()
                     if frontmost_app:
                         app_name = getattr(frontmost_app, 'AXTitle', '') or "Unknown"
                         
-                        # Skip system apps
-                        system_apps = ['Notification Center', 'Dock', 'Control Center', 'Spotlight']
-                        if app_name not in system_apps:
-                            best_app = frontmost_app
-                            if hasattr(best_app, 'AXFocusedWindow') and best_app.AXFocusedWindow:
-                                best_window = best_app.AXFocusedWindow
-                            elif hasattr(best_app, 'AXMainWindow') and best_app.AXMainWindow:
-                                best_window = best_app.AXMainWindow
+                        # Get the focused/main window
+                        best_window = None
+                        if hasattr(frontmost_app, 'AXFocusedWindow') and frontmost_app.AXFocusedWindow:
+                            best_window = frontmost_app.AXFocusedWindow
+                        elif hasattr(frontmost_app, 'AXMainWindow') and frontmost_app.AXMainWindow:
+                            best_window = frontmost_app.AXMainWindow
+                        elif hasattr(frontmost_app, 'windows') and frontmost_app.windows():
+                            windows = frontmost_app.windows()
+                            if windows:
+                                best_window = windows[0]
                 except Exception:
                     pass
             
-            if not best_app or not best_window:
+            # Skip system apps that don't have useful content
+            system_apps = ['Notification Center', 'Dock', 'Control Center', 'Spotlight']
+            if app_name in system_apps:
+                return None
+            
+            if not frontmost_app or not best_window:
                 return None
             
             # Check if app is ignored

@@ -14,9 +14,9 @@ from datetime import datetime
 from typing import Dict, Optional, List
 
 try:
-    import PyScreenReader as psr
+    import atomacos
 except ImportError:
-    print("PyScreenReader not installed. Run: pip install PyScreenReader")
+    print("atomacos not installed. Run: pip3 install atomacos")
     sys.exit(1)
 
 class ContextBridge:
@@ -57,27 +57,36 @@ class ContextBridge:
     def get_active_window_context(self) -> Optional[Dict]:
         """Extract context from active window"""
         try:
-            # Get active application and window
-            active_app = psr.get_active_application()
-            if not active_app:
+            # Get all applications and find the frontmost one
+            frontmost_app = atomacos.getFrontmostApp()
+            if not frontmost_app:
                 return None
                 
-            app_name = active_app.get_name()
+            app_name = frontmost_app.AXTitle or "Unknown"
             
             # Check if app is ignored
             if app_name in self.config["ignored_apps"]:
                 return None
             
-            # Get window content
-            windows = active_app.get_windows()
-            if not windows:
+            # Get frontmost window
+            try:
+                frontmost_window = None
+                if hasattr(frontmost_app, 'AXFocusedWindow') and frontmost_app.AXFocusedWindow:
+                    frontmost_window = frontmost_app.AXFocusedWindow
+                elif hasattr(frontmost_app, 'AXMainWindow') and frontmost_app.AXMainWindow:
+                    frontmost_window = frontmost_app.AXMainWindow
+                elif hasattr(frontmost_app, 'windows') and frontmost_app.windows():
+                    frontmost_window = frontmost_app.windows()[0]
+                
+                if not frontmost_window:
+                    return None
+                    
+                window_title = getattr(frontmost_window, 'AXTitle', '') or ''
+            except Exception:
                 return None
             
-            active_window = windows[0]  # First window is typically active
-            window_title = active_window.get_title()
-            
             # Extract text content
-            text_content = self.extract_text_from_element(active_window)
+            text_content = self.extract_text_from_element(frontmost_window)
             
             # Filter sensitive content
             if self.contains_sensitive_content(text_content):
@@ -103,30 +112,38 @@ class ContextBridge:
             print(f"Error getting context: {e}")
             return None
     
-    def extract_text_from_element(self, element) -> str:
+    def extract_text_from_element(self, element, depth=0) -> str:
         """Recursively extract text from UI element"""
+        if depth > 3:  # Prevent deep recursion
+            return ""
+            
         try:
             text_parts = []
             
             # Get direct text value
-            if hasattr(element, 'get_value'):
-                value = element.get_value()
-                if value and isinstance(value, str):
-                    text_parts.append(value)
+            if hasattr(element, 'AXValue') and element.AXValue:
+                if isinstance(element.AXValue, str):
+                    text_parts.append(element.AXValue)
             
             # Get text from title/label
-            if hasattr(element, 'get_title'):
-                title = element.get_title()
-                if title and isinstance(title, str):
-                    text_parts.append(title)
+            if hasattr(element, 'AXTitle') and element.AXTitle:
+                if isinstance(element.AXTitle, str):
+                    text_parts.append(element.AXTitle)
             
-            # Get children and recurse
-            if hasattr(element, 'get_children'):
-                children = element.get_children()
-                for child in children[:10]:  # Limit to prevent deep recursion
-                    child_text = self.extract_text_from_element(child)
-                    if child_text:
-                        text_parts.append(child_text)
+            # Get text from description
+            if hasattr(element, 'AXDescription') and element.AXDescription:
+                if isinstance(element.AXDescription, str):
+                    text_parts.append(element.AXDescription)
+            
+            # Get children and recurse (limit to prevent performance issues)
+            try:
+                if hasattr(element, 'AXChildren') and element.AXChildren:
+                    for child in element.AXChildren[:5]:  # Limit children
+                        child_text = self.extract_text_from_element(child, depth + 1)
+                        if child_text:
+                            text_parts.append(child_text)
+            except Exception:
+                pass
             
             return " ".join(text_parts)
             
@@ -216,7 +233,7 @@ def main():
     if args.setup:
         print("ContextBridge Setup")
         print("==================")
-        print("1. Install PyScreenReader: pip install PyScreenReader")
+        print("1. Install atomacos: pip3 install atomacos")
         print("2. Grant Accessibility permissions:")
         print("   System Preferences → Privacy & Security → Accessibility")
         print("   Add Terminal or your Python interpreter")
@@ -226,13 +243,19 @@ def main():
     
     if args.test:
         print("Testing screen reading...")
-        context = bridge.get_active_window_context()
-        if context:
-            print(f"App: {context['app_name']}")
-            print(f"Window: {context['window_title']}")
-            print(f"Content: {context['text_content'][:200]}...")
-        else:
-            print("No context captured (check accessibility permissions)")
+        try:
+            context = bridge.get_active_window_context()
+            if context:
+                print(f"✅ Success!")
+                print(f"App: {context['app_name']}")
+                print(f"Window: {context['window_title']}")
+                print(f"Content: {context['text_content'][:200]}...")
+            else:
+                print("❌ No context captured")
+                print("Check accessibility permissions in System Preferences")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            print("Make sure accessibility permissions are granted")
         return
     
     if args.start:

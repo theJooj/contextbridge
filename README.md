@@ -26,10 +26,21 @@ ContextBridge captures screen context from your Mac and streams it to OpenClaw f
 ## Installation
 
 ```bash
-pip install PyScreenReader requests
-python contextbridge.py --setup
-# Grant accessibility permissions in System Preferences
-python contextbridge.py --start
+# Install dependencies
+pip3 install atomacos requests
+
+# Clone and setup
+git clone https://github.com/theJooj/contextbridge.git
+cd contextbridge
+
+# Setup and grant permissions
+python3 contextbridge.py --setup
+
+# Test screen reading
+python3 contextbridge.py --test
+
+# Start daemon
+python3 contextbridge.py --start
 ```
 
 ## Configuration

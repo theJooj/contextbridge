@@ -1,0 +1,25 @@
+{
+  "openclaw_endpoint": "http://192.168.5.87:18789/api/context",
+  "poll_interval": 5,
+  "min_text_length": 20,
+  "ignored_apps": [
+    "1Password",
+    "Keychain Access",
+    "Activity Monitor",
+    "Console",
+    "System Preferences",
+    "Finder"
+  ],
+  "ignored_keywords": [
+    "password",
+    "ssn",
+    "social security",
+    "credit card",
+    "cvv",
+    "pin",
+    "passcode",
+    "token",
+    "api key"
+  ],
+  "max_context_length": 2000
+}

@@ -57,33 +57,56 @@ class ContextBridge:
     def get_active_window_context(self) -> Optional[Dict]:
         """Extract context from active window"""
         try:
-            # Get all applications and find the frontmost one
-            frontmost_app = atomacos.getFrontmostApp()
+            # Try to find an app with actual content (not system apps)
+            app_name = "Unknown"
+            frontmost_app = None
+            frontmost_window = None
+            
+            # Method 1: Try system-wide window search
+            try:
+                system_wide = atomacos.getSystemObject()
+                if hasattr(system_wide, 'AXFocusedWindow') and system_wide.AXFocusedWindow:
+                    frontmost_window = system_wide.AXFocusedWindow
+                    if hasattr(frontmost_window, 'AXParent'):
+                        frontmost_app = frontmost_window.AXParent
+                        while frontmost_app and getattr(frontmost_app, 'AXRole', '') != 'AXApplication':
+                            frontmost_app = getattr(frontmost_app, 'AXParent', None)
+            except Exception:
+                pass
+            
+            # Method 2: Fallback to frontmost app
             if not frontmost_app:
+                frontmost_app = atomacos.getFrontmostApp()
+                if not frontmost_app:
+                    return None
+                    
+            app_name = getattr(frontmost_app, 'AXTitle', '') or "Unknown"
+            
+            # Skip system apps that don't have useful content
+            system_apps = ['Notification Center', 'Dock', 'Control Center', 'Spotlight']
+            if app_name in system_apps:
                 return None
-                
-            app_name = frontmost_app.AXTitle or "Unknown"
             
             # Check if app is ignored
             if app_name in self.config["ignored_apps"]:
                 return None
             
-            # Get frontmost window
-            try:
-                frontmost_window = None
-                if hasattr(frontmost_app, 'AXFocusedWindow') and frontmost_app.AXFocusedWindow:
-                    frontmost_window = frontmost_app.AXFocusedWindow
-                elif hasattr(frontmost_app, 'AXMainWindow') and frontmost_app.AXMainWindow:
-                    frontmost_window = frontmost_app.AXMainWindow
-                elif hasattr(frontmost_app, 'windows') and frontmost_app.windows():
-                    frontmost_window = frontmost_app.windows()[0]
-                
-                if not frontmost_window:
-                    return None
+            # Get frontmost window if we don't have one already
+            if not frontmost_window:
+                try:
+                    if hasattr(frontmost_app, 'AXFocusedWindow') and frontmost_app.AXFocusedWindow:
+                        frontmost_window = frontmost_app.AXFocusedWindow
+                    elif hasattr(frontmost_app, 'AXMainWindow') and frontmost_app.AXMainWindow:
+                        frontmost_window = frontmost_app.AXMainWindow
+                    elif hasattr(frontmost_app, 'windows') and frontmost_app.windows():
+                        frontmost_window = frontmost_app.windows()[0]
                     
-                window_title = getattr(frontmost_window, 'AXTitle', '') or ''
-            except Exception:
-                return None
+                    if not frontmost_window:
+                        return None
+                except Exception:
+                    return None
+            
+            window_title = getattr(frontmost_window, 'AXTitle', '') or ''
             
             # Extract text content
             text_content = self.extract_text_from_element(frontmost_window)
@@ -110,6 +133,8 @@ class ContextBridge:
             
         except Exception as e:
             print(f"Error getting context: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def extract_text_from_element(self, element, depth=0) -> str:

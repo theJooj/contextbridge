@@ -101,7 +101,36 @@ class ContextBridge:
             # Skip system apps that don't have useful content
             system_apps = ['Notification Center', 'Dock', 'Control Center', 'Spotlight']
             if app_name in system_apps:
-                return None
+                # Notification Center bug workaround - try to find a real app
+                if app_name == 'Notification Center':
+                    # Little Bird might be interfering - try direct app search
+                    working_apps = [
+                        ('dev.warp.Warp-Stable', 'Warp'),
+                        ('com.apple.Terminal', 'Terminal'),
+                        ('com.google.Chrome', 'Chrome'),
+                        ('com.apple.Safari', 'Safari'),
+                        ('com.slack.Slack', 'Slack')
+                    ]
+                    
+                    for bundle_id, name in working_apps:
+                        try:
+                            app = atomacos.getAppRefByBundleId(bundle_id)
+                            if app and hasattr(app, 'windows') and app.windows():
+                                windows = app.windows()
+                                if windows:
+                                    # Found a real app - use it instead
+                                    frontmost_app = app
+                                    best_window = windows[0]
+                                    app_name = name
+                                    break
+                        except Exception:
+                            continue
+                    
+                    # If still Notification Center after workaround, give up
+                    if app_name == 'Notification Center':
+                        return None
+                else:
+                    return None
             
             if not frontmost_app or not best_window:
                 return None

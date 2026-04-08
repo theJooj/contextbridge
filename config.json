@@ -7,8 +7,7 @@
     "Keychain Access",
     "Activity Monitor",
     "Console",
-    "System Preferences",
-    "Finder"
+    "System Preferences"
   ],
   "ignored_keywords": [
     "password",
